@@ -1,0 +1,113 @@
+#!/usr/bin/python
+# ~*~ coding: utf-8 ~*~
+import time
+import sys
+import os
+from mironClient.xml import *
+from mironClient.send import *
+from mironClient.log import *
+from mironClient.const import *
+
+
+init = initXml("/etc/miron-client/init.xml")
+
+action = MAIN_LOAD_ACTION
+use_log = True
+if(len(sys.argv) > 1):
+	i = 1
+	while(i <= len(sys.argv)):
+		if((sys.argv[i] == '--help') or (sys.argv[i] == '-help') or (sys.argv[i] == '-h') or (sys.argv[i] == '--h')):
+			action = HELP_LOAD_ACTION
+		elif((action < VERSION_LOAD_ACTION) and ((sys.argv[i] == '-version') or (sys.argv[i] == '--version') or (sys.argv[i] == '-v'))):
+			action = VERSION_LOAD_ACTION
+		elif((action < CONFIG_LOAD_ACTION) and ((sys.argv[i] == '-config') or (sys.argv[i] == '--config') or (sys.argv[i] == '-info') or (sys.argv[i] == '--info'))):
+			action = CONFIG_LOAD_ACTION
+		elif((action < CREATE_INIT_LOAD_ACTION) and ((sys.argv[i] == '-create-init') or (sys.argv[i] == '--create-init'))):
+			action = CREATE_INIT_LOAD_ACTION
+		elif((action < SET_LOAD_ACTION) and ((sys.argv[i] == '-set') or (sys.argv[i] == '--set'))):
+			action = SET_LOAD_ACTION
+		elif((action < UPDATE_LOAD_ACTION) and ((sys.argv[i] == '-update') or (sys.argv[i] == '--update'))):
+			action = UPDATE_LOAD_ACTION
+		elif((action < HARDWARE_LOAD_ACTION) and ((sys.argv[i] == '-print-hardware') or (sys.argv[i] == '--print-hardware') or (sys.argv[i] == '-hardware') or (sys.argv[i] == '--hardware'))):
+			action = HARDWARE_LOAD_ACTION
+		elif((action < READY_LOAD_ACTION) and ((sys.argv[i] == '-ready') or (sys.argv[i] == '--ready'))):
+			action = READY_LOAD_ACTION
+		elif((sys.argv[i] == '-nolog') or (sys.argv[i] == '--nolog'))
+			use_log = False
+		i+=1
+
+
+if(action == HELP_LOAD_ACTION):
+	print "Отправка информации об оборудовании на сервер (необходимы администраторсие права): miron-client"
+	print "Проверка работоспособности сервера: miron-client -ready"
+	print "Просмотра установленного оборудования: miron-client -print-hardware"
+	print "Просмотра конфигурационной информации: miron-client -info"
+	print "Не записывать данные в лог: miron-client -nolog"
+	print "Создание конфигурационного файла (необходимы администраторсие права): miron-client -create-init [Параметры*]"
+	print "Изменение конфигурационной информации (необходимы администраторсие права): miron-client -set [Параметры*]"
+	print "Просмотр версии программы: miron-client -version"
+
+	print "\n* Параметры представлены в виде строки без пробелов. К примеру: ip=102.99.9.2,port=5015,next-check=reset"
+	print "Доступны следующие параметры:"
+	print "     id - уникальный номер компьютера. К примеру: id=1362081"
+	print "     ip - IP адрес сервера. К примеру: ip=192.168.2.3"
+	print "     port - порт сервера. К примеру: port=5015"
+	print "     check-period - величина, измеряющая периодичность обновления. Доступные значения: hour, day, week, month. К примеру check-period=week"
+	print "     check-every - количество обновлений за 1 check-period. К примеру: check-every=3"
+	print "     next-check - время следующего обновления, задаётся в секундах(UNIX время). Для сброса времени следующего обновления вводится значение reset. К примеру next-check=1279649151 или next-check=reset"
+
+elif(action == VERSION_LOAD_ACTION):
+	init.printVersion()
+elif(action == CONFIG_LOAD_ACTION):
+	init.printConfig()
+elif(action == CREATE_INIT_LOAD_ACTION):
+	if((len(sys.argv) > 3)):
+		if(os.path.exists("/etc/miron-client/init.xml")): print "Конфигурационный файл уже существует!"
+		else: 
+			init.createInit(sys.argv[2], sys.argv[3])
+	else: print "Неверное использование параметра -create-init. Для подробной информации введите: miron-client -help"
+elif(action == SET_LOAD_ACTION):
+	if((len(sys.argv) > 2)):
+		init.setInit(sys.argv[2])
+	else: print "Неверное использование параметра -set Для подробной информации введите: miron-client -help."
+elif(action == UPDATE_LOAD_ACTION):
+	if((len(sys.argv) > 2)):
+		if(init.setVersion(sys.argv[2]) == 0): print "Версия успешно изменена."
+		else: print "Ошибка при изменении версии."
+	else: print "Неверное использование параметра -update. Для подробной информации введите: miron-client -help"
+elif(action == HARDWARE_LOAD_ACTION):
+	xml = lshwParse("/etc/miron-client/info.xml")
+	info = xml.run()
+	xml.see()
+elif(action == READY_LOAD_ACTION):
+	conf = init.getInit()
+	sock = sendInfo(conf['server']['ip'], conf['server']['port'])
+	if(sock.ready() == 0): print "Сервер готов к приёму данных."
+	else: print "Не удалось связаться с сервером."
+elif(action == MAIN_LOAD_ACTION):
+	conf = init.getInit()
+	if(conf['check']['next'] < int(time.time())):
+		if((len(sys.argv) > 1) and ):
+			log = logWrite("", True)
+		else:
+			try:
+				log = logWrite("/var/log/miron-client.log")
+			except IOError, exc:
+				print "\nОшибка: " + str(exc)
+				print "Возможно вы запускаете программу без прав администратора!\n"
+				exit()
+		xml = lshwParse("/etc/miron-client/info.xml")
+		info = xml.run()
+		sock = sendInfo(conf['server']['ip'], conf['server']['port'])
+		res = sock.send(conf['computer-id'], conf['version'], info)
+		if(res == 0):
+			log.write("Информация успешно отправлена!")
+			init.setInit('next-check=' + str(int(time.time()) + conf['check']['period']))
+		elif(res == 1):
+			log.write("Произошла ошибка при отправке данных")
+		elif(res == 2):
+			log.write("Необходимо обновление (" + sock.getDeblink() + ")")
+			tmpdir = '/etc/miron-client/tmp' + str(int(time.time()))
+			os.system("sudo wget -P " + tmpdir + ' ' + sock.getDeblink())
+			os.system("sudo dpkg -R --install " + tmpdir)
+			os.system("sudo rm -rf " + tmpdir)
