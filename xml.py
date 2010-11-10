@@ -84,12 +84,6 @@ class initXml:
 		f.write(lxml.etree.tounicode(nf).encode('utf-8'))
 		f.close()
 
-	def mainVers(self, version):
-		i = 0
-		while((len(version) > i) and ((version[i] == '.') or (version[i] == '0') or (version[i] == '1') or (version[i] == '2') or (version[i] == '3') or (version[i] == '4') or (version[i] == '5') or (version[i] == '6') or (version[i] == '7') or (version[i] == '8') or (version[i] == '9'))):
-			i = i + 1
-		return version[:(i+1)]
-
 	def valid(self, sets, create = False):
 		if(sets.has_key('ip')):
 			start = 0
@@ -165,7 +159,7 @@ class initXml:
 
 	def printConfig(self):
 		if(self.run == False): self.parse()
-		print "Продукт: miron-client " + self.mainVers(self.init['version'])
+		print "Продукт: miron-client " + str(MIRON_VERSION)
 		print "Инвертарный номер: " + self.init['computer-id'].encode('utf-8')
 		print "Обновления: 1 раз в " + str(self.init['check']['period']) + " секунд"
 		if(self.init['check']['next'] < int(time.time())): print "Следующее обновление: при запуске"
