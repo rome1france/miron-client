@@ -2,8 +2,6 @@
 #import xml.etree.ElementTree as etree
 import lxml.etree
 from lxml import etree
-import time
-import sys
 
 class initXml:
 	def __init__(self, xmlpath):
@@ -21,6 +19,8 @@ class initXml:
 		for b in self.tree.getroot():
 			if(b.tag == 'computer'):
 					self.init['computer-id'] = b.attrib['id']
+			elif(b.tag == 'update'):
+					self.init['update'] = bool(b.attrib['install'])
 			elif(b.tag == 'check'):
 				if(b.attrib['period'] == 'month'): self.init['check']['period'] = 777600000*int(b.attrib['every'])
 				elif(b.attrib['period'] == 'week'): self.init['check']['period'] = 12960000*int(b.attrib['every'])
@@ -39,18 +39,18 @@ class initXml:
 					elif(g.tag == 'port'): self.init['server']['port'] = g.text
 		self.run = True
 
-	def createInit(self, sett, version):
+	def createInit(self, sett = None):
 		sets = self.valid(self.parkeys(sett), create=True)
 		if(sets == False): return 1
 
 		nf = lxml.etree.Element('config')
-		lxml.etree.SubElement(nf, 'product', attrib={'name': 'miron-client', 'version': version})
 		lxml.etree.SubElement(nf, 'computer', attrib={'id': sets['id']})
 		server = lxml.etree.SubElement(nf, 'server')
 		ip = lxml.etree.SubElement(server, 'ip')
 		ip.text = sets['ip']
 		port = lxml.etree.SubElement(server, 'port')
 		port.text = str(sets['port'])
+		lxml.etree.SubElement(nf, 'update', attrib={'install': sets['update']})
 		check = lxml.etree.SubElement(nf, 'check', attrib={'period': sets['check-period'], 'every': str(sets['check-every'])})
 		next = lxml.etree.SubElement(check, 'next')
 		next.text = str(sets['next-check'])
@@ -66,23 +66,26 @@ class initXml:
 		if(self.run == False): self.parse()
 		nf = self.tree
 		for b in nf.getroot():
-			if((b.tag == 'computer') and (sets.has_key('id') == 1)):
+			if((b.tag == 'computer') and (sets.has_key('id') == True)):
 				b.attrib['id'] = sets['id'].decode("UTF8")
 			elif(b.tag == 'server'):
 				for b1 in b:
-					if((b1.tag == 'ip') and (sets.has_key('ip') == 1)): b1.text = sets['ip']
-					elif((b1.tag == 'port') and (sets.has_key('port') == 1)): b1.text = str(sets['port'])
+					if((b1.tag == 'ip') and (sets.has_key('ip') == True)): b1.text = sets['ip']
+					elif((b1.tag == 'port') and (sets.has_key('port') == True)): b1.text = str(sets['port'])
+			elif((b.tag == 'update') and (sets.has_key('update') == True)):
+				b.attrib['install'] = sets['update']
 			elif(b.tag == 'check'):
-				if(sets.has_key('check-period') == 1):
+				if(sets.has_key('check-period') == True):
 					b.attrib['period'] = sets['check-period']
-				if(sets.has_key('check-every') == 1):
+				if(sets.has_key('check-every') == True):
 					b.attrib['every'] = str(sets['check-every'])
-				if(sets.has_key('next-check') == 1):
+				if(sets.has_key('next-check') == True):
 					for b2 in b:
 						if(b2.tag == 'next'): b2.text = str(sets['next-check'])
 		f = open(self.path, 'w')
 		f.write(lxml.etree.tounicode(nf).encode('utf-8'))
 		f.close()
+		return 0
 
 	def valid(self, sets, create = False):
 		if(sets.has_key('ip')):
@@ -117,23 +120,32 @@ class initXml:
 		if(sets.has_key('check-period')):
 			if((sets['check-period'] != 'hour') and (sets['check-period'] != 'day') and (sets['check-period'] != 'week') and (sets['check-period'] != 'month')):
 				return False
+		if(sets.has_key('update')):
+			if((sets['update'] == "False") or (sets['update'] == "0") or (sets['update'] == "n") or (sets['update'] == "no")):
+				sets['update'] = "False"
+			elif((sets['update'] == "True") or (sets['update'] == "1") or (sets['update'] == "y") or (sets['update'] == "yes")):
+				sets['update'] = "True"
 
-		if((create == True) and (sets.has_key('ip') == 0)):
+		if((create == True) and (sets.has_key('ip') == False)):
 			return False
-		if((create == True) and (sets.has_key('check-every') == 0)):
+		if((create == True) and (sets.has_key('check-every') == False)):
 			sets['check-every'] = 2
-		if((create == True) and (sets.has_key('check-period') == 0)):
+		if((create == True) and (sets.has_key('check-period') == False)):
 			sets['check-period'] = 'week'
-		if((create == True) and (sets.has_key('id') == 0)):
+		if((create == True) and (sets.has_key('id') == False)):
 			sets['id'] = 'unknown'
-		if((create == True) and (sets.has_key('port') == 0)):
+		if((create == True) and (sets.has_key('port') == False)):
 			sets['port'] = 5015
-		if((create == True) and (sets.has_key('next-check') == 0)):
+		if((create == True) and (sets.has_key('next-check') == False)):
 			sets['next-check'] = 0
+		if((create == True) and (sets.has_key('update') == False)):
+			sets['update'] = "True"
 
 		return sets
 
 	def parkeys(self, string):
+		if(string == None): 
+			return {}
 		pars = {}
 		startkey = -1
 		startval = -1
@@ -156,15 +168,6 @@ class initXml:
 			elif((i+1) == len(string)):
 				pars[curkey] = string[startval:]
 		return pars
-
-	def printConfig(self):
-		if(self.run == False): self.parse()
-		print "Продукт: miron-client " + str(MIRON_VERSION)
-		print "Инвертарный номер: " + self.init['computer-id'].encode('utf-8')
-		print "Обновления: 1 раз в " + str(self.init['check']['period']) + " секунд"
-		if(self.init['check']['next'] < int(time.time())): print "Следующее обновление: при запуске"
-		else: print "Следующее обновление: через " + str(int(time.time()) - self.init['check']['next']) + " секунд"
-		print "Сервер: " + self.init['server']['ip'] + ":" + self.init['server']['port']
 
 class lshwParse:
 	def __init__(self, xmlpath):

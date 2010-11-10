@@ -8,14 +8,15 @@ from mironClient.send import *
 from mironClient.log import *
 from mironClient.const import *
 
-
 init = initXml("/etc/miron-client/init.xml")
 
 action = MAIN_LOAD_ACTION
 use_log = True
+use_now = False
+param = []
 if(len(sys.argv) > 1):
 	i = 1
-	while(i <= len(sys.argv)):
+	while(i < len(sys.argv)):
 		if((sys.argv[i] == '--help') or (sys.argv[i] == '-help') or (sys.argv[i] == '-h') or (sys.argv[i] == '--h')):
 			action = HELP_LOAD_ACTION
 		elif((action < VERSION_LOAD_ACTION) and ((sys.argv[i] == '-version') or (sys.argv[i] == '--version') or (sys.argv[i] == '-v'))):
@@ -24,14 +25,22 @@ if(len(sys.argv) > 1):
 			action = CONFIG_LOAD_ACTION
 		elif((action < CREATE_INIT_LOAD_ACTION) and ((sys.argv[i] == '-create-init') or (sys.argv[i] == '--create-init'))):
 			action = CREATE_INIT_LOAD_ACTION
+			param = []
+		elif(action == CREATE_INIT_LOAD_ACTION):
+			param.append(sys.argv[i])
 		elif((action < SET_LOAD_ACTION) and ((sys.argv[i] == '-set') or (sys.argv[i] == '--set'))):
 			action = SET_LOAD_ACTION
+			param = []
+		elif(action == SET_LOAD_ACTION):
+			param.append(sys.argv[i])
 		elif((action < HARDWARE_LOAD_ACTION) and ((sys.argv[i] == '-print-hardware') or (sys.argv[i] == '--print-hardware') or (sys.argv[i] == '-hardware') or (sys.argv[i] == '--hardware'))):
 			action = HARDWARE_LOAD_ACTION
 		elif((action < READY_LOAD_ACTION) and ((sys.argv[i] == '-ready') or (sys.argv[i] == '--ready'))):
 			action = READY_LOAD_ACTION
-		elif((sys.argv[i] == '-nolog') or (sys.argv[i] == '--nolog'))
+		elif((sys.argv[i] == '-nolog') or (sys.argv[i] == '--nolog')):
 			use_log = False
+		elif((sys.argv[i] == '-now') or (sys.argv[i] == '--now')):
+			use_now = True
 		i+=1
 
 
@@ -50,57 +59,100 @@ if(action == HELP_LOAD_ACTION):
 	print "     id - уникальный номер компьютера. К примеру: id=1362081"
 	print "     ip - IP адрес сервера. К примеру: ip=192.168.2.3"
 	print "     port - порт сервера. К примеру: port=5015"
+	print "     update - установка обновлений автоматически. К примеру: update=True"
 	print "     check-period - величина, измеряющая периодичность обновления. Доступные значения: hour, day, week, month. К примеру check-period=week"
 	print "     check-every - количество обновлений за 1 check-period. К примеру: check-every=3"
 	print "     next-check - время следующего обновления, задаётся в секундах(UNIX время). Для сброса времени следующего обновления вводится значение reset. К примеру next-check=1279649151 или next-check=reset"
 
 elif(action == VERSION_LOAD_ACTION):
-	print "" + str(MIRON_VERSION)
+	print "miron-client " + str(MIRON_VERSION)
+
 elif(action == CONFIG_LOAD_ACTION):
-	init.printConfig()
-elif(action == CREATE_INIT_LOAD_ACTION):
-	if((len(sys.argv) > 3)):
-		if(os.path.exists("/etc/miron-client/init.xml")): print "Конфигурационный файл уже существует!"
+	if(os.path.exists("/etc/miron-client/init.xml")):
+		conf = init.getInit()
+		print "Продукт: miron-client " + str(MIRON_VERSION)
+		print "Инвертарный номер: " + conf['computer-id'].encode('utf-8')
+		print "Хост: " + socket.gethostbyaddr(socket.gethostname())[0]
+		print "Автоматическое обновление: " + str(conf['update'])
+		print "Отчёт серверу: 1 раз в " + str(conf['check']['period']) + " секунд"
+		if(conf['check']['next'] < int(time.time())): 
+			print "Следующее обновление: при запуске"
 		else: 
-			init.createInit(sys.argv[2], sys.argv[3])
-	else: print "Неверное использование параметра -create-init. Для подробной информации введите: miron-client -help"
+			print "Следующее обновление: через " + str(int(time.time()) - conf['check']['next']) + " секунд"
+		print "Сервер: " + conf['server']['ip'] + ":" + conf['server']['port']
+
+	else:
+		print "Не найден конфигурационный файл /etc/miron-client/init.xml"
+
+elif(action == CREATE_INIT_LOAD_ACTION):
+	if(os.path.exists("/etc/miron-client/init.xml")): 
+		print "Конфигурационный файл уже существует!"
+	elif(len(param) == 0): 
+		print "Неверное использование параметра -create-init. Для подробной информации введите: miron-client -help"
+	else:
+		log = init_log("/var/log/miron-client.log", use_log)
+		if(init.createInit(param[0]) == 0):
+			log.write("Конфигурационный файл успешно создан!", True)
+		else:
+			print "Не удалось создать конфигурационный файл!"
+
 elif(action == SET_LOAD_ACTION):
-	if((len(sys.argv) > 2)):
-		init.setInit(sys.argv[2])
-	else: print "Неверное использование параметра -set Для подробной информации введите: miron-client -help."
+	if((len(param) > 0)):
+		if(os.path.exists("/etc/miron-client/init.xml")):
+			log = init_log("/var/log/miron-client.log", use_log)
+			if(init.setInit(param[0]) == 0):
+				log.write("Конфигурационный файл успешно изменён!", True)
+			else:
+				print "Не удалось внести изменения в конфигурационный файл!"
+		else:
+			print "Не найден конфигурационный файл /etc/miron-client/init.xml"
+	else: 
+		print "Неверное использование параметра -set. Для подробной информации введите: miron-client -help."
+
 elif(action == HARDWARE_LOAD_ACTION):
-	xml = lshwParse("/etc/miron-client/info.xml")
-	info = xml.run()
-	xml.see()
+	if(os.path.exists("/etc/miron-client/info.xml")):
+		xml = lshwParse("/etc/miron-client/info.xml")
+		info = xml.run()
+		xml.see()
+	else:
+		print "Не найден файл /etc/miron-client/info.xml"
+		print "Попробуйте выполнить команду sudo lshw -xml > /etc/miron-client/info.xml (с правами администратора)"
+
 elif(action == READY_LOAD_ACTION):
-	conf = init.getInit()
+	if(os.path.exists("/etc/miron-client/init.xml")): 
+		conf = init.getInit()
+	else:
+		print "Не найден конфигурационный файл /etc/miron-client/init.xml"
+		exit()
 	sock = sendInfo(conf['server']['ip'], conf['server']['port'])
 	if(sock.ready() == 0): print "Сервер готов к приёму данных."
 	else: print "Не удалось связаться с сервером."
+
 elif(action == MAIN_LOAD_ACTION):
-	conf = init.getInit()
-	if(conf['check']['next'] < int(time.time())):
-		if((len(sys.argv) > 1) and ):
-			log = logWrite("", True)
-		else:
-			try:
-				log = logWrite("/var/log/miron-client.log")
-			except IOError, exc:
-				print "\nОшибка: " + str(exc)
-				print "Возможно вы запускаете программу без прав администратора!\n"
-				exit()
+	if(os.path.exists("/etc/miron-client/init.xml")): 
+		conf = init.getInit()
+	else:
+		log.write("Не найден конфигурационный файл /etc/miron-client/init.xml", True)
+		exit()
+	if((conf['check']['next'] < int(time.time())) or (use_now == True)):
+		log = init_log("/var/log/miron-client.log", use_log)
+		if(os.path.exists("/etc/miron-client/info.xml") == False):
+			log.write("Не найден файл /etc/miron-client/info.xml", True)
+			print "Попробуйте выполнить команду sudo lshw -xml > /etc/miron-client/info.xml (с правами администратора)"
+			exit()
 		xml = lshwParse("/etc/miron-client/info.xml")
 		info = xml.run()
 		sock = sendInfo(conf['server']['ip'], conf['server']['port'])
-		res = sock.send(conf['computer-id'], conf['version'], info)
+		res = sock.send(conf['computer-id'], MIRON_VERSION, info)
 		if(res == 0):
-			log.write("Информация успешно отправлена!")
+			log.write("Информация успешно отправлена!", True)
 			init.setInit('next-check=' + str(int(time.time()) + conf['check']['period']))
 		elif(res == 1):
-			log.write("Произошла ошибка при отправке данных")
+			log.write("Произошла ошибка при отправке данных", True)
 		elif(res == 2):
-			log.write("Необходимо обновление (" + sock.getDeblink() + ")")
-			tmpdir = '/etc/miron-client/tmp' + str(int(time.time()))
-			os.system("sudo wget -P " + tmpdir + ' ' + sock.getDeblink())
-			os.system("sudo dpkg -R --install " + tmpdir)
-			os.system("sudo rm -rf " + tmpdir)
+			log.write("Необходимо обновление (" + sock.getDeblink() + ")", True)
+			if(conf['update'] == True):
+				tmpdir = '/etc/miron-client/tmp' + str(int(time.time()))
+				os.system("sudo wget -P " + tmpdir + ' ' + sock.getDeblink())
+				os.system("sudo dpkg -R --install " + tmpdir)
+				os.system("sudo rm -rf " + tmpdir)
