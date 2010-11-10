@@ -146,7 +146,10 @@ elif(action == MAIN_LOAD_ACTION):
 		res = sock.send(conf['computer-id'], MIRON_VERSION, info)
 		if(res == 0):
 			log.write("Информация успешно отправлена!", True)
-			init.setInit('next-check=' + str(int(time.time()) + conf['check']['period']))
+			try:
+				init.setInit('next-check=' + str(int(time.time()) + conf['check']['period']))
+			except IOError, exc:
+				print "Не удалось изменить время следующего запуска: " + str(exc)
 		elif(res == 1):
 			log.write("Произошла ошибка при отправке данных", True)
 		elif(res == 2):

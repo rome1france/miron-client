@@ -1,7 +1,7 @@
 # ~*~ coding: utf-8 ~*~
 
 # miron-client version:
-MIRON_VERSION = "1.0.0"
+MIRON_VERSION = "0.9.9"
 
 # load actions:
 HELP_LOAD_ACTION = 100
