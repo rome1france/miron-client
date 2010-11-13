@@ -1,0 +1,8 @@
+miron-client is part of system Miron.
+
+Miron has got 3 parts:
+* miron-server
+* miron-client
+* miron-gui
+
+miron-client collect information about installing hardware on computer and send report to miron-server.
